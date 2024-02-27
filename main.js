@@ -17,9 +17,53 @@ client.once('ready', () => {
 });
 
 // Event: Message received
-client.on('messageCreate', (message) => {
+client.on('messageCreate', async (message) => {
   if (message.content.toLowerCase() === '!start-adventure') {
-    createCommand(message);
+    // Check if the user already has roles
+    const existingRoles = message.member.roles.cache.filter(role => role.name.endsWith('Adventurer') || role.name.endsWith('Class'));
+    if (existingRoles.size > 0) {
+      const replyMessage = 'You already have roles. You can only get roles once.';
+      const options = ['Exit', 'Proceed'];
+
+      // Send a confirmation message with options
+      const confirmationMessage = await message.reply({
+        content: replyMessage,
+        components: [{
+          type: 'ACTION_ROW',
+          components: options.map(option => ({
+            type: 'BUTTON',
+            style: 'PRIMARY',
+            label: option,
+            customId: option.toLowerCase(),
+          })),
+        }],
+      });
+
+      // Await user's choice
+      const filter = i => i.customId && options.map(opt => opt.toLowerCase()).includes(i.customId) && i.user.id === message.author.id;
+      const collector = confirmationMessage.createMessageComponentCollector({ filter, time: 15000 }); // Adjust time as needed
+
+      collector.on('collect', async (interaction) => {
+        // User clicked a button
+        await interaction.deferUpdate();
+
+        if (interaction.customId === 'exit') {
+          message.channel.send('Adventure canceled. If you change your mind, use `!start-adventure` again.');
+        } else if (interaction.customId === 'proceed') {
+          createCommand(message);
+        }
+      });
+
+      collector.on('end', collected => {
+        if (collected.size === 0) {
+          message.channel.send('Adventure canceled due to inactivity. If you change your mind, use `!start-adventure` again.');
+        }
+      });
+
+    } else {
+      // User does not have roles, proceed with creating roles
+      createCommand(message);
+    }
   }
 });
 
